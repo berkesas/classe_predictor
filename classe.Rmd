@@ -1,0 +1,84 @@
+---
+title: "Classe Predictor"
+author: "Nazar Mammedov"
+date: "2025-01-12"
+output:
+  pdf_document: default
+  html_document: default
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## Introduction
+
+Create training and test partitions. We create internal train and test partitions from the data provided in "pml-training.csv" because we want to be able to test our model.
+
+```{r, cache=TRUE}
+library(caret)
+library(ggplot2)
+library(e1071)
+library(dplyr)
+
+data = read.csv("pml-training.csv")
+external_test = read.csv("pml-testing.csv")
+```
+
+Create a new dataset with proper columns both for training and external test. We drop columns with a lot of NAs because they are not going to be useful anyway, and also drop some variables such as timestamps.
+
+```{r, cache=TRUE}
+# Drop columns with any NA values
+data_no_na <- data %>% select_if(~ !any(is.na(.))) 
+test_no_na <- external_test %>% select_if(~ !any(is.na(.))) 
+
+#Select only numeric columns
+data_numeric <- data_no_na %>% select_if(is.numeric) %>% bind_cols(data_no_na %>% select(classe))
+test_numeric <- test_no_na %>% select_if(is.numeric)
+
+# drop first 4 columns X, timestamps, and num_window 
+# because I don't think they are good predictors anyway
+new_data <- data_numeric[, -c(1:4)]
+new_data$classe <- as.factor(new_data$classe)
+new_test_data <- test_numeric[, -c(1:4)]
+new_test_data <- new_test_data %>% select(-problem_id)
+```
+
+Now given this data set. We train the model with SVM linear. It gives .7856 accuracy level which is acceptable for our purposes.
+
+```{r, cache=TRUE}
+# Split the data into training and testing sets (70/30 split)
+set.seed(123)
+inTrain <- createDataPartition(new_data$classe, p = 0.7, list = FALSE)
+train_data <- new_data[inTrain, ]
+test_data <- new_data[-inTrain, ]
+
+# Build a classification model (e.g., SVM)
+model_all <- svm(classe ~ ., data = train_data, kernel = "linear")
+
+# Make predictions and evaluate the model
+predictions_all <- predict(model_all, test_data)
+cm <- confusionMatrix(predictions_all, test_data$classe)
+cm
+```
+
+## Out of sample error rate
+
+Out of sample error rate is (1-Accuracy rate), but can be calculated as below. Its value is 0.2144.
+
+```{r}
+conf_matrix <- cm$table
+misclassifications <- sum(conf_matrix) - sum(diag(conf_matrix))
+total_observations <- sum(conf_matrix)
+misclassification_rate <- misclassifications / total_observations
+print(misclassification_rate)
+```
+
+## Predicting 20 cases
+
+Now we predict "classe" in the external test data which was provided in "pml-testing.csv". As predicted this gives about 80% of accuracy, which was also the expected Quiz result.
+
+```{r}
+predictions_test <- predict(model_all, new_test_data)
+print(predictions_test)
+```
