@@ -11,7 +11,7 @@ output:
 knitr::opts_chunk$set(echo = TRUE)
 ```
 
-## Introduction
+## Loading data
 
 Create training and test partitions. We create internal train and test partitions from the data provided in "pml-training.csv" because we want to be able to test our model.
 
@@ -24,6 +24,8 @@ library(dplyr)
 data = read.csv("pml-training.csv")
 external_test = read.csv("pml-testing.csv")
 ```
+
+## Cleaning data
 
 Create a new dataset with proper columns both for training and external test. We drop columns with a lot of NAs because they are not going to be useful anyway, and also drop some variables such as timestamps.
 
@@ -44,7 +46,9 @@ new_test_data <- test_numeric[, -c(1:4)]
 new_test_data <- new_test_data %>% select(-problem_id)
 ```
 
-Now given this data set. We train the model with SVM linear. It gives .7856 accuracy level which is acceptable for our purposes.
+## Basic modelling
+
+Now given this data set. We train the model with SVM linear. It gives .7856 accuracy level which is not good.
 
 ```{r, cache=TRUE}
 # Split the data into training and testing sets (70/30 split)
@@ -53,21 +57,38 @@ inTrain <- createDataPartition(new_data$classe, p = 0.7, list = FALSE)
 train_data <- new_data[inTrain, ]
 test_data <- new_data[-inTrain, ]
 
-# Build a classification model (e.g., SVM)
 model_all <- svm(classe ~ ., data = train_data, kernel = "linear")
 
-# Make predictions and evaluate the model
 predictions_all <- predict(model_all, test_data)
 cm <- confusionMatrix(predictions_all, test_data$classe)
 cm
 ```
 
+## Random forests approach
+
+We try Random forests approach. And we don't have to train it on a full training partition. We can use a smaller subset. Otherwise we have to wait for zillion hours for the training to complete because we don't have a supercomputer at hand. It still gives higher than 90% results.
+
+```{r, cache=TRUE}
+# Sample 2000 observations randomly and create a smaller subset
+sample_indices <- sample(seq_len(nrow(train_data)), size = 4000)
+small_train <- train_data[sample_indices, ]
+
+control = trainControl(method="cv", number=5)
+model_rf <- train(classe~., data=small_train, method='rf', trControl = control)
+
+predictions_rf <- predict(model_rf, test_data)
+cmrf <- confusionMatrix(predictions_rf, test_data$classe)
+cmrf
+```
+
+Random Forest gives better Accuracy. 
+
 ## Out of sample error rate
 
-Out of sample error rate is (1-Accuracy rate), but can be calculated as below. Its value is 0.2144.
+Out of sample error rate is (1-Accuracy rate), but can be calculated as below. 
 
-```{r}
-conf_matrix <- cm$table
+```{r, cache=TRUE}
+conf_matrix <- cmrf$table
 misclassifications <- sum(conf_matrix) - sum(diag(conf_matrix))
 total_observations <- sum(conf_matrix)
 misclassification_rate <- misclassifications / total_observations
@@ -76,9 +97,9 @@ print(misclassification_rate)
 
 ## Predicting 20 cases
 
-Now we predict "classe" in the external test data which was provided in "pml-testing.csv". As predicted this gives about 80% of accuracy, which was also the expected Quiz result.
+Now we predict "classe" in the external test data which was provided in "pml-testing.csv". As predicted this gives about 94% of accuracy, which was also the expected Quiz result.
 
 ```{r}
-predictions_test <- predict(model_all, new_test_data)
+predictions_test <- predict(model_rf, new_test_data)
 print(predictions_test)
 ```

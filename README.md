@@ -1,4 +1,4 @@
-# You can use classe.pdf for grading purposes.
+# classe_predictor
 Classe Predictor
 
-You can use classe.pdf for grading purposes.
+You can use classe.pdf or classe.html for grading purposes.
